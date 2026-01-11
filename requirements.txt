@@ -2,3 +2,4 @@ websockets
 requests
 python-dotenv
 asyncio
+aiosqlite

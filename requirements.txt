@@ -3,3 +3,4 @@ requests
 python-dotenv
 asyncio
 aiosqlite
+py-clob-client

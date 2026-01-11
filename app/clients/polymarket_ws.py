@@ -14,6 +14,7 @@ class PolymarketWSClient:
 
         self.callback = None
         self.keep_running = False
+
         self.current_subscriptions = set()
         self.lock = asyncio.Lock()
 
@@ -25,25 +26,28 @@ class PolymarketWSClient:
 
         while self.keep_running:
             try:
-                logger.info("正在連接 Polymarket websocket")
-                async with websockets.connect(url) as ws:
+                logger.info(f"🔌 [WS] 正在連接: {url}")
+
+                async with websockets.connect(url, ping_interval=20) as ws:
                     self.ws = ws
-                    logger.info("連線成功")
+                    logger.info(f"✅ [WS] 連線成功")
 
                     if self.current_subscriptions:
-                        logger.info("偵測到 Polymarket websocket 重新連線，自動補訂閱")
-                        await self.subscribe(self.current_subscriptions)
+                        logger.info(f"🔄 [WS] 偵測到重連，自動補訂閱 {len(self.current_subscriptions)} 筆")
+
+                        subscriptions_list = list(self.current_subscriptions)
+                        await self.subscribe(subscriptions_list)
 
                     async for message in ws:
                         if self.callback:
                             asyncio.create_task(self.callback(message))
 
             except (websockets.exceptions.ConnectionClosed, asyncio.TimeoutError):
-                logger.warning("Polymarket websocket 連線中斷，準備重新連線")
+                logger.warning("⚠️ [WS] 連線中斷，5秒後準備重新連線...")
                 self.ws = None
 
             except Exception as e:
-                logger.error(f"websocket 錯誤: {e}")
+                logger.error(f"❌ [WS] 發生錯誤: {e}", exc_info=True)
                 self.ws = None
 
             # 重新連線
@@ -58,8 +62,19 @@ class PolymarketWSClient:
             "operation": "subscribe"
         }
 
-        logger.info("訂閱 token")
+        logger.debug(f"📤 [WS] 發送訂閱封包: {msg}")
         await self._send_json(msg)
+
+    async def unsubscribe(self, asset_ids: List[str]):
+        msg = {
+            "assets_ids": asset_ids,
+            "operation": "unsubscribe"
+        }
+
+        logger.debug(f"📤 [WS] 發送取消訂閱: {msg}")
+        await self._send_json(msg)
+
+        self.current_subscriptions.difference_update(asset_ids)
 
     async def _send_json(self, payload: dict):
         async with self.lock:
@@ -68,8 +83,8 @@ class PolymarketWSClient:
                     await self.ws.send(json.dumps(payload))
 
                 except Exception as e:
-                    logger.error(f"發送失敗: {e}")
+                    logger.error(f"❌ [WS] 發送失敗: {e}")
 
             else:
-                logger.warning("Websocket 未連線，無法發送訊息")
+                logger.warning("⚠️ [WS] 未連線，無法發送訊息")
 

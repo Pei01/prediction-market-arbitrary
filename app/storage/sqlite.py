@@ -1,5 +1,6 @@
 import aiosqlite
 import logging
+from datetime import datetime
 from typing import List, Tuple, Optional
 
 logger = logging.getLogger(__name__)
@@ -29,9 +30,14 @@ class SQLiteClient:
             CREATE TABLE IF NOT EXISTS markets (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 slug TEXT UNIQUE,
+                asset TEXT NOT NULL,
                 title TEXT,
                 created_at TEXT
             );
+        """)
+
+        await self.conn.execute("""
+            CREATE INDEX IF NOT EXISTS idx_markets_asset ON markets(asset);
         """)
 
         # ticks table
@@ -51,9 +57,11 @@ class SQLiteClient:
         await self.conn.execute("CREATE INDEX IF NOT EXISTS idx_market_ts ON ticks (market_id, ts);")
         await self.conn.commit()
 
-    async def get_or_create_market(self, slug: str, title: str, created_at: str) -> Optional[int]:
+    async def get_or_create_market(self, slug: str, asset: str, title: str) -> Optional[int]:
         if not self.conn:
             return None
+
+        created_at = datetime.now().isoformat()
 
         try:
             async with self.conn.execute("SELECT id FROM markets WHERE slug = ?", (slug,)) as cursor:
@@ -61,11 +69,11 @@ class SQLiteClient:
 
                 if row:
                     return row[0]
-            
+
             cursor = await self.conn.execute("""
-                INSERT INTO markets (slug, title, created_at)
-                VALUES (?, ?, ?)
-            """, (slug, title, created_at))
+                INSERT INTO markets (slug, asset, title, created_at)
+                VALUES (?, ?, ?, ?)
+            """, (slug, asset, title, created_at))
 
             await self.conn.commit()
             return cursor.lastrowid

@@ -173,13 +173,11 @@ class Collector:
         asset = self.asset.lower()
         slug = f"{asset}-updown-15m-{timestamp}"
 
-        current_time = datetime.now().isoformat()
-
         # DB
         market_id = await self.db.get_or_create_market(
             slug=slug,
+            asset=asset,
             title=title,
-            created_at=current_time
         )
 
         if not market_id:
